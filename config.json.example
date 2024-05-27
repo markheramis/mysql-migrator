@@ -1,0 +1,70 @@
+{
+    "source": {
+        "host": "<source_host>",
+        "port": 3306,
+        "name": "<source_name>",
+        "user": "<source_user>",
+        "pass": "<source_pass>",
+        "tables": [
+            {
+                "name": "user",
+                "columns": [
+                    "id",
+                    "username",
+                    "password",
+                    "email"
+                ],
+                "rename": "users",
+                "condition": "id != 510"
+            },
+            {
+                "name": "author",
+                "rename": "authors",
+                "overrides": [
+                    {
+                        "name": "id",
+                        "value": 23,
+                        "set": {
+                            "first_name": "Eric",
+                            "last_name": "Underhill"
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "posts",
+                "overrides": [
+                    {
+                        "name": "id",
+                        "value": 300,
+                        "set": {
+                            "author_id": 30
+                        }
+                    },
+                    {
+                        "name": "visibility",
+                        "value": "private",
+                        "set": {
+                            "visibility": "public"
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "destination": {
+        "host": "<destinationn_host>",
+        "port": 3306,
+        "name": "<destination_name>",
+        "user": "<destination_user>",
+        "pass": "<destination_pass>",
+        "tables": [
+            {
+                "name": "users"
+            },
+            {
+                "name": "posts"
+            }
+        ]
+    }
+}
