@@ -56,6 +56,16 @@ MySQL Migrator is a Rust-based utility designed to migrate tables from one MySQL
     - **tables**: An array of tables in the destination database to be migrated. Each table is represented by an object that contains:
         - **name**: The name of the table in the destination database. This should match the rename field of the corresponding table in the source database. If the rename field was not specified in the source database, this should match the original table name.
 
+## Arguments
+- `--config`: Specify the configuration file of the migration. Default is "config.json".
+- `--extended-insert`: Use extended `INSERT` statements.
+- `--complete-insert`: Include column names in `INSERT` statements.
+- `--insert-ignore`: Use `INSERT IGNORE` instead of `INSERT`.
+- `--export-only`: Run in export-only mode. Skip the import process.
+- `--extended-insert-limit`: Limit the number of rows in extended `INSERT` statements. Default is 50.
+- `--clean`: Clean previous exports before running the program.
+- `h`, `--help`: Print help.
+- `V`, `--version`: Print version.
 
 ## Todo
 - export multi-threaded

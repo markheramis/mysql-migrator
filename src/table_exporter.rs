@@ -1,10 +1,10 @@
 use crate::database::Database;
-use crate::{TableConfig, Override};
+use crate::Override;
+use crate::TableConfig;
 use mysql::Value;
 use std::fs::File;
 use std::io::Write;
 use std::io::BufWriter;
-
 fn escape_string(bytes: &[u8]) -> String {
     let mut escaped_string = String::from_utf8_lossy(bytes).to_string();
     escaped_string = escaped_string.replace("\\", "\\\\");
@@ -20,19 +20,12 @@ fn escape_string(bytes: &[u8]) -> String {
 }
 fn value_to_string(value: Value) -> String {
     match value {
-        // Convert NULL values to the string "NULL"
         Value::NULL => "NULL".to_string(),
-        // Convert byte arrays to strings, escaping as necessary
         Value::Bytes(bytes) => escape_string(&bytes),
-        // Convert integer values to strings
         Value::Int(int) => int.to_string(),
-        // Convert unsigned integer values to strings
         Value::UInt(uint) => uint.to_string(),
-        // Convert floating-point values to strings
         Value::Float(float) => float.to_string(),
-        // Convert double-precision floating-point values to strings
         Value::Double(double) => double.to_string(),
-        // Convert date and time values to strings
         Value::Date(year, month, day, hour, minute, second, micro) => {
             if year == 0 && month == 0 && day == 0 && hour == 0 && minute == 0 && second == 0 && micro == 0 {
                 "NULL".to_string()
@@ -40,16 +33,12 @@ fn value_to_string(value: Value) -> String {
                 format!("\"{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}\"", year, month, day, hour, minute, second, micro)
             }
         },
-        // Convert any other types to "NULL" as a placeholder
         _ => "NULL".to_string(),
     }
 }
-
-
 fn to_vector_string(row: mysql::Row) -> Vec<String> {
     row.unwrap().into_iter().map(value_to_string).collect()
 }
-
 fn get_columns(db: &mut Database, table: &TableConfig) -> Vec<String> {
     match &table.columns {
         Some(column_list) if column_list.len() == 1 && column_list[0] == "*" => db.query_columns(&table.name),
@@ -57,14 +46,12 @@ fn get_columns(db: &mut Database, table: &TableConfig) -> Vec<String> {
         None => db.query_columns(&table.name),
     }
 }
-
 fn get_file_name(table: &TableConfig) -> String {
     match &table.table_rename {
         Some(rename) => format!("data/{}.sql", rename),
         None => format!("data/{}.sql", table.name),
     }
 }
-
 fn serde_value_to_mysql_value(value: serde_json::Value) -> mysql::Value {
     match value {
         serde_json::Value::Null => mysql::Value::NULL,
@@ -84,7 +71,6 @@ fn serde_value_to_mysql_value(value: serde_json::Value) -> mysql::Value {
         serde_json::Value::Array(_) | serde_json::Value::Object(_) => mysql::Value::NULL, // handle complex types as needed
     }
 }
-
 fn apply_overrides(values: &mut Vec<String>, columns: &Vec<String>, overrides: &Option<Vec<Override>>) {
     if let Some(overrides) = overrides {
         for override_conf in overrides {
@@ -102,7 +88,6 @@ fn apply_overrides(values: &mut Vec<String>, columns: &Vec<String>, overrides: &
         }
     }
 }
-
 fn rename_columns(columns: &mut Vec<String>, column_rename: &Option<std::collections::HashMap<String, String>>) {
     if let Some(rename_map) = column_rename {
         for (old_name, new_name) in rename_map {
@@ -112,35 +97,76 @@ fn rename_columns(columns: &mut Vec<String>, column_rename: &Option<std::collect
         }
     }
 }
-
-pub fn export_table(db: &mut Database, table: &TableConfig) {
+pub fn export_table(
+    db: &mut Database,
+    table: &TableConfig,
+    extended_insert: bool,
+    extended_insert_limit: usize,
+    complete_insert: bool,
+    insert_ignore: bool,
+) {
     let mut columns: Vec<String> = get_columns(db, table);
-    let result = db.query_table_unbuffered(
-        &table.name, 
-        &columns.join(", "), 
-        &table.condition
-    );
+    let result = db.query_table_unbuffered(&table.name, &columns.join(", "), &table.condition);
     let file_name: String = get_file_name(table);
     let file: File = File::create(&file_name).expect("Unable to create file");
     let mut writer: BufWriter<File> = BufWriter::new(file);
-
     if let Ok(mut query_result) = result {
+        let insert_prefix = if insert_ignore {
+            "INSERT IGNORE INTO"
+        } else {
+            "INSERT INTO"
+        };
+        let mut insert_statement = String::new();
+        let mut row_count = 0;
         while let Some(row) = query_result.next() {
             let row: mysql::Row = row.unwrap();
             let mut values: Vec<String> = to_vector_string(row);
-            
             apply_overrides(&mut values, &columns, &table.overrides);
+            // Rename columns after applying overrides
             rename_columns(&mut columns, &table.column_rename);
-
-            let insert_statement: String = format!(
-                "INSERT INTO {} ({}) VALUES ({});",
-                table.table_rename.as_ref().unwrap_or(&table.name),
-                columns.join(", "),
-                values.join(", ")
-            );
+            // Create column_names after renaming columns
+            let column_names = if complete_insert {
+                format!(" ({})", columns.join(", "))
+            } else {
+                String::new()
+            };
+            if extended_insert {
+                if row_count == 0 {
+                    insert_statement.push_str(&format!(
+                        "{} {}{} VALUES",
+                        insert_prefix,
+                        table.table_rename.as_ref().unwrap_or(&table.name),
+                        column_names
+                    ));
+                } else {
+                    insert_statement.push_str(",");
+                }
+                insert_statement.push_str(&format!(" ({})", values.join(", ")));
+                row_count += 1;
+                if row_count >= extended_insert_limit {
+                    insert_statement.push_str(";");
+                    writeln!(writer, "{}", insert_statement).expect("Unable to write to file");
+                    insert_statement.clear();
+                    row_count = 0;
+                }
+            } else {
+                // Use renamed columns in the INSERT statements
+                insert_statement = format!(
+                    "{} {}{} VALUES ({});",
+                    insert_prefix,
+                    table.table_rename.as_ref().unwrap_or(&table.name),
+                    column_names,
+                    values.join(", ")
+                );
+                writeln!(writer, "{}", insert_statement).expect("Unable to write to file");
+                insert_statement.clear();
+            }
+        }
+        if extended_insert && !insert_statement.is_empty() {
+            insert_statement.push_str(";");
             writeln!(writer, "{}", insert_statement).expect("Unable to write to file");
         }
+        println!("export {}: completed", &table.name);
     }
-
     writer.flush().expect("Failed to flush the buffer");
 }

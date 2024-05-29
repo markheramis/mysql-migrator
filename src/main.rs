@@ -1,9 +1,3 @@
-// Import necessary modules
-mod arguments;
-mod database;
-mod table_exporter;
-mod table_importer;
-
 use arguments::Args;
 use clap::Parser;
 use serde::Deserialize;
@@ -11,11 +5,18 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use serde_json::Value;
+
+mod arguments;
+mod database;
+mod table_exporter;
+mod table_importer;
+
 #[derive(Debug, Deserialize)]
 struct Config {
     source: DatabaseConfig,
     destination: DatabaseConfig,
 }
+
 #[derive(Debug, Deserialize)]
 struct DatabaseConfig {
     host: String,
@@ -25,6 +26,7 @@ struct DatabaseConfig {
     pass: String,
     tables: Vec<TableConfig>,
 }
+
 #[derive(Debug, Deserialize)]
 struct TableConfig {
     name: String,
@@ -35,6 +37,7 @@ struct TableConfig {
     overrides: Option<Vec<Override>>,
     column_rename: Option<HashMap<String, String>>,
 }
+
 #[derive(Debug, Deserialize)]
 struct Override {
     name: String,
@@ -54,18 +57,30 @@ fn main() {
     let data_path: &Path = Path::new("data");
     if !data_path.exists() {
         fs::create_dir_all(data_path).expect("Failed to create data directory");
+    } else {
+        if !args.clean {
+            fs::remove_dir(data_path).expect("Failed to clear data directory");
+            fs::create_dir_all(data_path).expect("Failed to create data directory");
+        }
     }
     let mut source_db: database::Database = database::Database::new(&config.source);
     for table in &config.source.tables {
-        println!("exporting {}: in progress", &table.name);
-        table_exporter::export_table(&mut source_db, table);
-        println!("exporting {}: completed", &table.name);
+        table_exporter::export_table(
+            &mut source_db, 
+            table,
+            args.extended_insert,
+            args.extended_insert_limit,
+            args.complete_insert,
+            args.insert_ignore,
+        );
     }
-    let mut destination_db: database::Database = database::Database::new(&config.destination);
-    for table in &config.destination.tables {
-        println!("importing {}: in progress", &table.name);
-        let file_name: String = format!("{}.sql", table.name);
-        table_importer::import_table(&mut destination_db, &file_name);
-        println!("importing {}: completed", &table.name);
+    if !args.export_only {
+        let mut destination_db: database::Database = database::Database::new(&config.destination);
+        for table in &config.destination.tables {
+            let file_name: String = format!("{}.sql", table.name);
+            table_importer::import_table(&mut destination_db, table, &file_name);
+        }
+    } else {
+        println!("Export-only mode: Skipping import process");
     }
 }
