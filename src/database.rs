@@ -1,6 +1,5 @@
 use mysql::*;
 use mysql::prelude::*;
-
 use crate::DatabaseConfig;
 
 pub struct Database {
