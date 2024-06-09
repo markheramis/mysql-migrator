@@ -5,6 +5,7 @@ use mysql::Value;
 use std::fs::File;
 use std::io::Write;
 use std::io::BufWriter;
+use std::path::PathBuf;
 fn escape_string(bytes: &[u8]) -> String {
     let mut escaped_string = String::from_utf8_lossy(bytes).to_string();
     escaped_string = escaped_string.replace("\\", "\\\\");
@@ -46,10 +47,11 @@ fn get_columns(db: &mut Database, table: &TableConfig) -> Vec<String> {
         None => db.query_columns(&table.name),
     }
 }
-fn get_file_name(table: &TableConfig) -> String {
+fn get_file_name(export_path: &PathBuf, table: &TableConfig) -> String {
+    let path = export_path.display().to_string();
     match &table.table_rename {
-        Some(rename) => format!("data/{}.sql", rename),
-        None => format!("data/{}.sql", table.name),
+        Some(rename) => format!("{}\\{}.sql",path, rename),
+        None => format!("{}\\{}.sql", path, table.name),
     }
 }
 fn serde_value_to_mysql_value(value: serde_json::Value) -> mysql::Value {
@@ -99,6 +101,7 @@ fn rename_columns(columns: &mut Vec<String>, column_rename: &Option<std::collect
 }
 pub fn export_table(
     db: &mut Database,
+    export_path: &PathBuf,
     table: &TableConfig,
     extended_insert: bool,
     extended_insert_limit: usize,
@@ -107,7 +110,7 @@ pub fn export_table(
 ) {
     let mut columns: Vec<String> = get_columns(db, table);
     let result = db.query_table_unbuffered(&table.name, &columns.join(", "), &table.condition);
-    let file_name: String = get_file_name(table);
+    let file_name: String = get_file_name(export_path, table);
     let file: File = File::create(&file_name).expect("Unable to create file");
     let mut writer: BufWriter<File> = BufWriter::new(file);
     if let Ok(mut query_result) = result {

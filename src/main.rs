@@ -1,32 +1,28 @@
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Map};
+use std::{collections::HashMap, fs, path::PathBuf};
 use arguments::Args;
 use clap::Parser;
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
-use serde_json::Value;
-
+use config_table::process_table_configuration;
 mod arguments;
 mod database;
 mod table_exporter;
 mod table_importer;
-
+mod config_conn;
+mod config_table;
 #[derive(Debug, Deserialize)]
-struct Config {
-    source: DatabaseConfig,
-    destination: DatabaseConfig,
+struct ConnectionConfig {
+    source: ConnectionDatabaseConfig,
+    destination: ConnectionDatabaseConfig,
 }
-
-#[derive(Debug, Deserialize)]
-struct DatabaseConfig {
-    host: String,
+#[derive(Debug, Serialize, Deserialize)]
+struct ConnectionDatabaseConfig {
+    hostname: String,
     port: u16,
-    name: String,
-    user: String,
-    pass: String,
-    tables: Vec<TableConfig>,
+    database: String,
+    username: String,
+    password: String,
 }
-
 #[derive(Debug, Deserialize)]
 struct TableConfig {
     name: String,
@@ -37,36 +33,42 @@ struct TableConfig {
     overrides: Option<Vec<Override>>,
     column_rename: Option<HashMap<String, String>>,
 }
-
 #[derive(Debug, Deserialize)]
 struct Override {
     name: String,
-    value: Value,
-    set: HashMap<String, Value>,
+    value: serde_json::Value,
+    set: HashMap<String, serde_json::Value>,
 }
 fn main() {
     let args: Args = Args::parse();
-    let config_file: &str = args.config.as_deref().unwrap_or("config.json");
-    let config: Config = match fs::read_to_string(config_file) {
-        Ok(content) => serde_json::from_str(&content).expect("Invalid config file format"),
-        Err(_) => {
-            eprintln!("Config file {} does not exist", config_file);
-            return;
-        }
+    let connection_config: &str = args.connection_config.as_deref().unwrap_or("connection.json");
+    let mut conn: serde_json::Value = match fs::read_to_string(connection_config) {
+        Ok(content) => serde_json::from_str(&content).unwrap(),
+        Err(_) => serde_json::from_str("{}").unwrap()
     };
-    let data_path: &Path = Path::new("data");
-    if !data_path.exists() {
-        fs::create_dir_all(data_path).expect("Failed to create data directory");
+    let conn_map: &mut Map<String, serde_json::Value> = conn.as_object_mut().unwrap();
+    config_conn::process_connection_configuration(&args, conn_map);
+    let conn: ConnectionConfig = serde_json::from_value(json!(conn_map)).expect("Failed to deserialize ConnectionConfig");
+    let table_config: &str = args.table_config.as_deref().unwrap_or("table.json");
+    let table_json: String = fs::read_to_string(table_config).expect("Failed to read table.json");
+    let table_configs: Vec<TableConfig>;
+    table_configs = process_table_configuration(table_json);
+    
+    let default_path: PathBuf = std::env::current_dir().unwrap().join("mysql-migrator");
+    let export_path: &PathBuf = &args.export_path.map(PathBuf::from).unwrap_or(default_path);
+    if !export_path.exists() {
+        fs::create_dir_all(export_path).expect("Failed to create data directory");
     } else {
-        if !args.clean {
-            fs::remove_dir(data_path).expect("Failed to clear data directory");
-            fs::create_dir_all(data_path).expect("Failed to create data directory");
+        if args.clean {
+            fs::remove_dir_all(export_path).expect("Failed to clear data directory");
+            fs::create_dir_all(export_path).expect("Failed to create data directory");
         }
     }
-    let mut source_db: database::Database = database::Database::new(&config.source);
-    for table in &config.source.tables {
+    let mut source_db: database::Database = database::Database::new(&conn.source);
+    for table in &table_configs {
         table_exporter::export_table(
-            &mut source_db, 
+            &mut source_db,
+            export_path,
             table,
             args.extended_insert,
             args.extended_insert_limit,
@@ -75,10 +77,9 @@ fn main() {
         );
     }
     if !args.export_only {
-        let mut destination_db: database::Database = database::Database::new(&config.destination);
-        for table in &config.destination.tables {
-            let file_name: String = format!("{}.sql", table.name);
-            table_importer::import_table(&mut destination_db, table, &file_name);
+        let mut destination_db: database::Database = database::Database::new(&conn.destination);
+        for table in &table_configs {
+            table_importer::import_table(&mut destination_db, table,export_path);
         }
     } else {
         println!("Export-only mode: Skipping import process");

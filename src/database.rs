@@ -1,22 +1,22 @@
 use mysql::*;
 use mysql::prelude::*;
-use crate::DatabaseConfig;
+use crate::ConnectionDatabaseConfig;
 
 pub struct Database {
     pub conn: PooledConn,
     pub name: String,
 }
 impl Database {
-    pub fn new(config: &DatabaseConfig) -> Self {
+    pub fn new(database_config: &ConnectionDatabaseConfig) -> Self {
         let opts: OptsBuilder = OptsBuilder::new()
-            .ip_or_hostname(Some(config.host.clone()))  
-            .tcp_port(config.port) 
-            .user(Some(config.user.clone()))
-            .pass(Some(config.pass.clone()))
-            .db_name(Some(config.name.clone()));
+            .ip_or_hostname(Some(database_config.hostname.clone()))  
+            .tcp_port(database_config.port) 
+            .user(Some(database_config.username.clone()))
+            .pass(Some(database_config.password.clone()))
+            .db_name(Some(database_config.database.clone()));
         let pool: Pool = Pool::new(opts).unwrap();
         let conn: PooledConn = pool.get_conn().unwrap();
-        Self { conn, name: config.name.clone() }
+        Self { conn, name: database_config.database.clone() }
     }
     pub fn query_columns(&mut self, table: &str) -> Vec<String> {
         let query: String = format!(

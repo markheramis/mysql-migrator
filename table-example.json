@@ -1,0 +1,29 @@
+[
+    "roles",
+    {
+        "name": "users",
+        "columns": [
+            "id",
+            "status",
+            "username",
+            "email",
+            "password",
+            "created_at",
+            "updated_at"
+        ],
+        "condition": "id != 2", // exclude user with id 2
+        "overrides": [
+            {
+                "name": "id",
+                "value": 1,
+                "set": {
+                    "username": "admin"
+                }
+            } // set usernamme to "admin" to user with id `1`
+        ]
+    },
+    {
+        "name": "user_roles",
+        "condition": "id != 22" // exclude user_roles with id 22
+    }
+]

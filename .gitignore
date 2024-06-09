@@ -1,2 +1,4 @@
 /target
-config.json
+/mysql-migrator
+connection.json
+table.json

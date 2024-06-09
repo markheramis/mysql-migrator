@@ -1,0 +1,16 @@
+{
+    "source": {
+        "hostname": "192.168.1.200",
+        "port": 3306,
+        "database": "production_database",
+        "username": "production_reader",
+        "password": "my_s3cr3tp@s5W0rd"
+    },
+    "destination": {
+        "hostname": "localhost",
+        "port": 3306,
+        "database": "homestead",
+        "username": "homestead",
+        "password": "secret"
+    }
+}
