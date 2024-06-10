@@ -113,9 +113,10 @@ This setup allows for flexible and efficient migration of MySQL databases, tailo
     ```
 
 ## Todo
-- export multi-threaded
-- importing with XML
-- importing with JSON
+- use multiple threads in exporter for faster export.
+- use transactions in importer for faster import.
+- XML export and import support.
+- JSON export and import support.
 
 ## Contributing
 
