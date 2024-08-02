@@ -109,6 +109,10 @@ pub fn export_table(
     insert_ignore: bool,
 ) {
     let mut columns: Vec<String> = get_columns(db, table);
+    columns.iter_mut().for_each(|s| {
+        s.insert(0, '`');
+        s.push('`');
+    });
     let result = db.query_table_unbuffered(&table.name, &columns.join(", "), &table.condition);
     let file_name: String = get_file_name(export_path, table);
     let file: File = File::create(&file_name).expect("Unable to create file");
