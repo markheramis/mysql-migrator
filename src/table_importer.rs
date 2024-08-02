@@ -15,8 +15,16 @@ pub fn import_table(
     let file: File = File::open(export_file).expect("Unable to open file");
     let reader: BufReader<File> = BufReader::new(file);
     for line in reader.lines() {
-        let query: String = line.expect("Unable to read line");
-        db.conn.query_drop(query).expect("Query execution failed");
+        let query = line.expect("Unable to read line");
+        match db.conn.query_drop(&query) {
+            Ok(_) => {
+                // Do nothing here (no output)
+                // println!("{}: executed", query);
+            },
+            Err(err) => {
+                eprintln!("Error executing query: {}\nError details: {}", query, err)
+            },
+        }
     }
     println!("import {}: completed", &table.name);
 }
