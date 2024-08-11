@@ -91,6 +91,27 @@ Ensure that the connection and table configuration files are correctly specified
     "table2"
 ]
 ```
+
+```
+[
+    {
+        "name": "table1",
+        "columns": ["column1", "column2"],
+        "table_rename": "new_table1",
+        "condition": "column1 > 10",
+        "overrides": [
+        {
+            "name": "id",
+            "value": "1",
+            "set": {
+                "foreign_id": "5"}
+        }
+        ],
+        "column_rename": {"old_column1": "new_column1"}
+    },
+    "table2"
+]
+```
 This setup allows for flexible and efficient migration of MySQL databases, tailored to your specific needs.
 
 ## Getting Started
