@@ -1,9 +1,50 @@
-use arguments::Args;
-use serde_json::{json, Map};
+
 use std::io;
+use std::fs;
+use serde_json::Map;
+use serde_json::json;
+use serde::Serialize;
+use serde::Deserialize;
+use serde_json::Value;
 use rpassword::read_password;
+use arguments::Args;
 use crate::arguments;
-pub fn process_connection_configuration(args: &Args, conn_map: &mut Map<String, serde_json::Value>) {
+
+#[derive(Debug, Deserialize)]
+pub struct ConnectionConfig {
+    pub source: ConnectionDatabaseConfig,
+    pub destination: ConnectionDatabaseConfig,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConnectionDatabaseConfig {
+    pub hostname: String,
+    pub port: u16,
+    pub database: String,
+    pub username: String,
+    pub password: String,
+}
+
+pub fn get_config(args: &Args) -> ConnectionConfig {
+    let path: &str = args
+        .connection_config
+        .as_deref()
+        .unwrap_or("connection.json");
+
+    let mut conf: Value = match fs::read_to_string(path) {
+        Ok(str) => serde_json::from_str(&str).unwrap(),
+        Err(_) => serde_json::from_str("{}").unwrap()
+    };
+
+    let conn_map: &mut Map<String, Value> = conf.as_object_mut().unwrap();
+    process_connection_configuration(&args, conn_map);
+
+    return serde_json::from_value(json!(conn_map))
+        .expect("Failed to deserialize ConnectionConfig");
+}
+pub fn process_connection_configuration(
+    args: &Args,
+    conn_map: &mut Map<String, Value>
+) {
     if !conn_map.contains_key("source") {
         conn_map.insert("source".to_string(), json!(Map::new()));
     }
@@ -16,7 +57,7 @@ pub fn process_connection_configuration(args: &Args, conn_map: &mut Map<String, 
 fn input_string(
     root_key: String,
     key: String,
-    conn_map: &mut Map<String, serde_json::Value>,
+    conn_map: &mut Map<String, Value>,
 ) {
     println!("Please enter your {} {}: ", root_key, key);
     let mut input = String::new();
@@ -32,7 +73,7 @@ fn input_string(
 fn input_password(
     root_key: String,
     key: String,
-    conn_map:  &mut Map<String, serde_json::Value>
+    conn_map:  &mut Map<String, Value>
 ) {
     println!("Please enter your {} {}: ", root_key, key);
     let password = read_password().unwrap();
@@ -45,7 +86,7 @@ fn input_password(
 fn input_int(
     root_key: String,
     key: String,
-    conn_map: &mut Map<String, serde_json::Value>
+    conn_map: &mut Map<String, Value>
 ) {
     println!("Please enter your {} {}: ", root_key, key);
     let mut input: String = String::new();
@@ -63,7 +104,7 @@ fn input_int(
         Err(_) => println!("{} {} is not a valid number", root_key, key),
     }
 }
-fn process_source_configuration(args: &Args, conn_map: &mut Map<String, serde_json::Value>) {
+fn process_source_configuration(args: &Args, conn_map: &mut Map<String, Value>) {
     if let Some(source_host) = &args.source_host {
         conn_map.get_mut("source").and_then(|source| {
             source.as_object_mut().map(|map| {
@@ -111,7 +152,7 @@ fn process_source_configuration(args: &Args, conn_map: &mut Map<String, serde_js
     }
 }
 
-fn process_destination_configuration(args: &Args, conn_map: &mut Map<String, serde_json::Value>) {
+fn process_destination_configuration(args: &Args, conn_map: &mut Map<String, Value>) {
     if let Some(destination_host) = &args.destination_host {
         conn_map.get_mut("destination").and_then(|destination| {
             destination.as_object_mut().map(|map| {
